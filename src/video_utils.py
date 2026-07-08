@@ -21,12 +21,14 @@ import requests
 
 logger = logging.getLogger("video_utils")
 
-DOWNLOAD_TIMEOUT_SECONDS = int(os.environ.get("DOWNLOAD_TIMEOUT_SECONDS", "60"))
+DOWNLOAD_TIMEOUT_SECONDS = int(os.environ.get("DOWNLOAD_TIMEOUT_SECONDS", "120"))
 DOWNLOAD_RETRIES = int(os.environ.get("DOWNLOAD_RETRIES", "3"))
 MAX_VIDEO_BYTES = int(os.environ.get("MAX_VIDEO_BYTES", str(500 * 1024 * 1024)))  # 500MB safety cap
 MIN_FRAMES = int(os.environ.get("MIN_FRAMES", "8"))
 MAX_FRAMES = int(os.environ.get("MAX_FRAMES", "16"))
 FFMPEG_TIMEOUT_SECONDS = int(os.environ.get("FFMPEG_TIMEOUT_SECONDS", "90"))
+FRAME_MAX_SIDE = int(os.environ.get("FRAME_MAX_SIDE", "768"))
+JPEG_QUALITY = int(os.environ.get("JPEG_QUALITY", "5"))  # ffmpeg qscale: lower is better; 5 is compact/good
 
 
 class VideoDownloadError(RuntimeError):
@@ -99,7 +101,7 @@ def _frame_count_for_duration(duration: float) -> int:
 
 
 def extract_frames(video_path: str, out_dir: str, max_frames_override: int | None = None) -> List[str]:
-    """Extract evenly-spaced JPEG frames spanning the whole video.
+    """Extract evenly-spaced, resized JPEG frames spanning the whole video.
 
     Returns a chronologically sorted list of file paths. Raises FFmpegError
     if no frames could be produced at all.
@@ -113,6 +115,12 @@ def extract_frames(video_path: str, out_dir: str, max_frames_override: int | Non
     span = max(duration - 2 * inset, 0.1)
     timestamps = [inset + span * (i / max(n_frames - 1, 1)) for i in range(n_frames)]
 
+    scale_filter = f"scale={FRAME_MAX_SIDE}:{FRAME_MAX_SIDE}:force_original_aspect_ratio=decrease"
+    logger.debug(
+        "Extracting %d frame(s) with ffmpeg scale='%s', jpeg q=%d",
+        n_frames, scale_filter, JPEG_QUALITY,
+    )
+
     frame_paths: List[str] = []
     for i, ts in enumerate(timestamps):
         out_path = os.path.join(out_dir, f"frame_{i:03d}.jpg")
@@ -120,7 +128,10 @@ def extract_frames(video_path: str, out_dir: str, max_frames_override: int | Non
             subprocess.run(
                 [
                     "ffmpeg", "-y", "-ss", f"{ts:.3f}", "-i", video_path,
-                    "-frames:v", "1", "-q:v", "3", out_path,
+                    "-frames:v", "1",
+                    "-vf", scale_filter,
+                    "-q:v", str(JPEG_QUALITY),
+                    out_path,
                 ],
                 capture_output=True, timeout=FFMPEG_TIMEOUT_SECONDS, check=True,
             )

@@ -178,6 +178,14 @@ Expected output shape (`/output/results.json`):
 | `TASKS_INPUT_PATH` | `/input/tasks.json` | override for local testing |
 | `RESULTS_OUTPUT_PATH` | `/output/results.json` | override for local testing |
 
+Additional environment variables:
+
+| `RUN_TIMEOUT_SECONDS` | `600` | Optional global run timeout (seconds). If set, the agent will write partial results and exit non-zero when the timeout elapses (default 600s = 10 minutes, matching Track 2 limit). |
+| `DOWNLOAD_TIMEOUT_SECONDS` | `120` | Increased default per-attempt download timeout to 120s to be more robust on slow hosts. |
+
+Implementation notes:
+- `FireworksClient` now defensively serializes structured `content` responses to JSON strings so `captioning.py` can reliably parse model outputs even if the provider returns an already-parsed object.
+
 ## Error handling coverage
 
 `missing tasks.json`, `malformed JSON`, `missing task_id`, `missing video_url`,

@@ -15,6 +15,7 @@ import logging
 import os
 import sys
 import time
+import threading
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -112,6 +113,34 @@ def process_task(client, raw_task: dict, index: int) -> dict:
 def main() -> int:
     start = time.time()
     results: list = []
+
+    # Global accessor used by the watchdog thread so it can write partial
+    # results if the overall runtime limit is exceeded.
+    global _VCAGENT_RESULTS_GLOBAL  # set by the watchdog below
+    _VCAGENT_RESULTS_GLOBAL = results
+
+    # Optional global run timeout (seconds). If set, a background watchdog
+    # will write whatever results we have and force-exit with a non-zero
+    # status after the timeout expires. Default: 600s (10 minutes) to match
+    # the Track 2 limit.
+    try:
+        RUN_TIMEOUT = int(os.environ.get("RUN_TIMEOUT_SECONDS", "600"))
+    except Exception:
+        RUN_TIMEOUT = 600
+
+    def _watchdog():
+        time.sleep(RUN_TIMEOUT)
+        try:
+            logger.error("Global run timeout (%ds) reached — writing partial results and exiting", RUN_TIMEOUT)
+            # Write whatever results have been accumulated so far.
+            write_results(_VCAGENT_RESULTS_GLOBAL or [])
+        except Exception:
+            logger.exception("watchdog failed while trying to write partial results")
+        # Ensure a non-zero exit code for the container runtime.
+        os._exit(124)
+
+    t = threading.Thread(target=_watchdog, name="vcagent-watchdog", daemon=True)
+    t.start()
 
     if not os.path.exists(INPUT_PATH):
         logger.error("Input file not found at %s", INPUT_PATH)
