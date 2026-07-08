@@ -1,0 +1,7 @@
+# Optional. Only needed if you run MODEL_PROVIDER=local.
+# NOT installed in the default Docker image (keeps the image small and the
+# build fast, which is what Track 2 rewards). Install these yourself only
+# for local development on a machine without Fireworks access.
+torch>=2.2.0
+transformers>=4.42.0
+Pillow>=10.3.0

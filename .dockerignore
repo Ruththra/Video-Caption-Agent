@@ -1,0 +1,13 @@
+.git
+.gitignore
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+tests/
+sample_input/
+README.md
+*.md
+.DS_Store
+requirements-local.txt
